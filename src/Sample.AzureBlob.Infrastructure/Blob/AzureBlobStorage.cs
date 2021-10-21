@@ -48,9 +48,9 @@ public class AzureBlobStorage : IAzureBlobStorage
         return containers;
     }
 
-    public async Task UploadAsync(string fileExtensiom, string filePath, CloudBlobContainer blobContainer)
+    public async Task UploadAsync(string fileExtension, string filePath, CloudBlobContainer blobContainer)
     {
-        var fileName = $"{Guid.NewGuid()}{fileExtensiom}";
+        var fileName = $"{Guid.NewGuid()}{fileExtension}";
 
         var blockBlob = GetBlockBlobAsync(fileName, blobContainer);
 
@@ -59,9 +59,9 @@ public class AzureBlobStorage : IAzureBlobStorage
         await blockBlob.UploadFromStreamAsync(fileStream);
     }
 
-    public async Task<string> UploadAsync(string fileExtensiom, Stream stream, CloudBlobContainer blobContainer, string contentType)
+    public async Task<string> UploadAsync(string fileExtension, Stream stream, CloudBlobContainer blobContainer, string contentType)
     {
-        var fileName = $"{Guid.NewGuid()}{fileExtensiom}";
+        var fileName = $"{Guid.NewGuid()}{fileExtension}";
 
         var blockBlob = GetBlockBlobAsync(fileName, blobContainer);
         blockBlob.Properties.ContentType = contentType;
@@ -69,7 +69,7 @@ public class AzureBlobStorage : IAzureBlobStorage
         stream.Position = 0;
         await blockBlob.UploadFromStreamAsync(stream);
 
-        return blockBlob.StorageUri.PrimaryUri.AbsoluteUri;
+        return blockBlob.Uri.AbsoluteUri;
     }
 
     public async Task<DownloadViewModel> DownloadAsync(string blobName, CloudBlobContainer blobContainer)
@@ -77,7 +77,11 @@ public class AzureBlobStorage : IAzureBlobStorage
         var model = new DownloadViewModel();
         var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
 
-        model.File = blockBlob.StorageUri.PrimaryUri.AbsoluteUri;
+        await using var memoryStream = new MemoryStream();
+        await blockBlob.DownloadToStreamAsync(memoryStream);
+        var str = Encoding.ASCII.GetString(memoryStream.ToArray());
+
+        model.File = str;
         model.Name = blobName;
 
         return model;
@@ -232,13 +236,12 @@ public class AzureBlobStorage : IAzureBlobStorage
         return blob.Uri + sasBlobToken;
     }
 
-    static async void CreateSharedAccessPolicy(CloudBlobContainer container, string policyName)
+    public async void CreateSharedAccessPolicy(CloudBlobContainer container, string policyName)
     {
         var sharedPolicy = new SharedAccessBlobPolicy()
         {
             SharedAccessExpiryTime = DateTime.UtcNow.AddHours(24),
-            Permissions = SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.List |
-                          SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Delete
+            Permissions = SharedAccessBlobPermissions.Read
         };
 
         var permissions = await container.GetPermissionsAsync();

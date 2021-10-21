@@ -7,12 +7,10 @@ namespace Sample.AzureBlob.WebApi.Controllers
     [Route("[controller]")]
     public class BlobController : ControllerBase
     {
-        private readonly ILogger<BlobController> _logger;
         private readonly IAzureBlobStorage _azureBlobStorage;
 
-        public BlobController(ILogger<BlobController> logger, IAzureBlobStorage azureBlobStorage)
+        public BlobController(IAzureBlobStorage azureBlobStorage)
         {
-            _logger = logger;
             _azureBlobStorage = azureBlobStorage;
         }
 
@@ -23,12 +21,12 @@ namespace Sample.AzureBlob.WebApi.Controllers
             string? result = null;
             foreach (var formFile in files)
             {
-                if (formFile.Length > 0)
-                {
-                    var extension = Path.GetExtension(formFile.FileName);
-                    await using var stream = formFile.OpenReadStream();
-                    result = await _azureBlobStorage.UploadAsync(extension, stream, container);
-                }
+                if (formFile.Length <= 0)
+                    continue;
+
+                var extension = Path.GetExtension(formFile.FileName);
+                await using var stream = formFile.OpenReadStream();
+                result = await _azureBlobStorage.UploadAsync(extension, stream, container);
             }
             return Ok(result);
         }

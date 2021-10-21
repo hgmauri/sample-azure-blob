@@ -21,4 +21,5 @@ public interface IAzureBlobStorage
     string GetContainerSasUri(CloudBlobContainer container, string storedPolicyName = null);
     string GetBlobSasUri(CloudBlobContainer container, string blobName, string policyName = null);
     Task DeleteFile(CloudBlobContainer container, string uniqueFileIdentifier);
+    void CreateSharedAccessPolicy(CloudBlobContainer container, string policyName);
 }

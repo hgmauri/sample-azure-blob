@@ -1,4 +1,5 @@
-﻿using Microsoft.Azure.Storage;
+﻿using System.Text;
+using Microsoft.Azure.Storage;
 using Microsoft.Azure.Storage.Blob;
 
 namespace Sample.AzureBlob.Infrastructure.Blob;
@@ -10,24 +11,17 @@ public class AzureBlobStorage : IAzureBlobStorage
     public AzureBlobStorage(AzureBlobSettings settings)
     {
         if (CloudStorageAccount.TryParse(settings.StorageConnectionString, out var storageAccount))
-        {
             StorageAccount = storageAccount;
-
-        }
         else
-        {
             throw new Exception("unable to parse connection string");
-        }
     }
     public async Task<CloudBlobContainer> CreateContainerAsync(string containerName)
     {
-
+        containerName = containerName.ToLower();
         var blobClient = StorageAccount.CreateCloudBlobClient();
-
 
         var blobContainer = blobClient.GetContainerReference(containerName);
         await blobContainer.CreateIfNotExistsAsync();
-
 
         var permissions = await blobContainer.GetPermissionsAsync();
         permissions.PublicAccess = BlobContainerPublicAccessType.Container;
@@ -54,70 +48,59 @@ public class AzureBlobStorage : IAzureBlobStorage
         return containers;
     }
 
-    public async Task UploadAsync(string blobName, string filePath, CloudBlobContainer blobContainer)
+    public async Task UploadAsync(string fileExtensiom, string filePath, CloudBlobContainer blobContainer)
     {
-        //Blob
-        var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
+        var fileName = $"{Guid.NewGuid()}{fileExtensiom}";
 
-        //Upload
+        var blockBlob = GetBlockBlobAsync(fileName, blobContainer);
+
         await using var fileStream = File.Open(filePath, FileMode.Open);
         fileStream.Position = 0;
         await blockBlob.UploadFromStreamAsync(fileStream);
     }
 
-    public async Task<string> UploadAsync(string blobName, Stream stream, CloudBlobContainer blobContainer, string contentType)
+    public async Task<string> UploadAsync(string fileExtensiom, Stream stream, CloudBlobContainer blobContainer, string contentType)
     {
-        //Blob
-        var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
+        var fileName = $"{Guid.NewGuid()}{fileExtensiom}";
+
+        var blockBlob = GetBlockBlobAsync(fileName, blobContainer);
         blockBlob.Properties.ContentType = contentType;
-        //Upload
-        //  IDictionary<string, string> dict = new Dictionary<string, string>();
 
         stream.Position = 0;
         await blockBlob.UploadFromStreamAsync(stream);
 
-        return blockBlob.Uri.AbsoluteUri;
+        return blockBlob.StorageUri.PrimaryUri.AbsoluteUri;
     }
 
     public async Task<DownloadViewModel> DownloadAsync(string blobName, CloudBlobContainer blobContainer)
     {
         var model = new DownloadViewModel();
-        //Blob
         var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
 
-        //Download
-        var stream = new MemoryStream { Position = 0 };
-        await blockBlob.DownloadToStreamAsync(stream);
-        await blockBlob.FetchAttributesAsync();
+        model.File = blockBlob.StorageUri.PrimaryUri.AbsoluteUri;
+        model.Name = blobName;
 
-        model.Stream = stream;
         return model;
     }
 
     public async Task DownloadAsync(string blobName, string path, CloudBlobContainer blobContainer)
     {
-        //Blob
         var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
 
-        //Download
         await blockBlob.DownloadToFileAsync(path, FileMode.Create);
     }
 
     public async Task DeleteAsync(string blobName, CloudBlobContainer blobContainer)
     {
-        //Blob
         var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
 
-        //Delete
         await blockBlob.DeleteAsync();
     }
 
     public async Task<bool> ExistsAsync(string blobName, CloudBlobContainer blobContainer)
     {
-        //Blob
         var blockBlob = GetBlockBlobAsync(blobName, blobContainer);
 
-        //Exists
         return await blockBlob.ExistsAsync();
     }
 
@@ -131,9 +114,9 @@ public class AzureBlobStorage : IAzureBlobStorage
         switch (rootFolder)
         {
             case "*":
-                return await ListAsync(blobContainer); //All Blobs
+                return await ListAsync(blobContainer);
             case "/":
-                rootFolder = "";          //Root Blobs
+                rootFolder = "";
                 break;
         }
 
@@ -165,19 +148,15 @@ public class AzureBlobStorage : IAzureBlobStorage
 
     public CloudBlobContainer GetContainerAsync(string containerName)
     {
-        //Client
         var blobClient = StorageAccount.CreateCloudBlobClient();
 
-        //Container
         var blobContainer = blobClient.GetContainerReference(containerName);
-        // await blobContainer.CreateIfNotExistsAsync();
 
         return blobContainer;
     }
 
     private CloudBlockBlob GetBlockBlobAsync(string blobName, CloudBlobContainer blobContainer)
     {
-        //Blob
         var blockBlob = blobContainer.GetBlockBlobReference(blobName);
 
         return blockBlob;
@@ -185,7 +164,6 @@ public class AzureBlobStorage : IAzureBlobStorage
 
     public async Task<List<AzureBlobItem>> GetBlobListAsync(CloudBlobContainer blobContainer, bool useFlatListing = true)
     {
-        //List
         var list = new List<AzureBlobItem>();
         BlobContinuationToken token = null;
         do
@@ -194,10 +172,7 @@ public class AzureBlobStorage : IAzureBlobStorage
                 await blobContainer.ListBlobsSegmentedAsync("", useFlatListing, new BlobListingDetails(), null, token, null, null);
             token = resultSegment.ContinuationToken;
 
-            foreach (var item in resultSegment.Results)
-            {
-                list.Add(new AzureBlobItem(item));
-            }
+            list.AddRange(resultSegment.Results.Select(item => new AzureBlobItem(item)));
         } while (token != null);
 
         return list.OrderBy(i => i.Folder).ThenBy(i => i.Name).ToList();
@@ -217,7 +192,6 @@ public class AzureBlobStorage : IAzureBlobStorage
         {
             var adHocPolicy = new SharedAccessBlobPolicy()
             {
-                // Set start time to five minutes before now to avoid clock skew.
                 SharedAccessStartTime = DateTime.UtcNow.AddMinutes(-5),
                 SharedAccessExpiryTime = DateTime.UtcNow.AddHours(24),
                 Permissions = SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.List
@@ -242,7 +216,6 @@ public class AzureBlobStorage : IAzureBlobStorage
         {
             var adHocSas = new SharedAccessBlobPolicy()
             {
-                // Set start time to five minutes before now to avoid clock skew.
                 SharedAccessStartTime = DateTime.UtcNow.AddMinutes(-5),
                 SharedAccessExpiryTime = DateTime.UtcNow.AddHours(24),
                 Permissions = SharedAccessBlobPermissions.Read | SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.Create
@@ -261,7 +234,6 @@ public class AzureBlobStorage : IAzureBlobStorage
 
     static async void CreateSharedAccessPolicy(CloudBlobContainer container, string policyName)
     {
-        //Create a new shared access policy and define its constraints.
         var sharedPolicy = new SharedAccessBlobPolicy()
         {
             SharedAccessExpiryTime = DateTime.UtcNow.AddHours(24),
@@ -269,10 +241,8 @@ public class AzureBlobStorage : IAzureBlobStorage
                           SharedAccessBlobPermissions.Write | SharedAccessBlobPermissions.Create | SharedAccessBlobPermissions.Delete
         };
 
-        //Get the container's existing permissions.
         var permissions = await container.GetPermissionsAsync();
 
-        //Add the new policy to the container's permissions, and set the container's permissions.
         permissions.SharedAccessPolicies.Add(policyName, sharedPolicy);
         await container.SetPermissionsAsync(permissions);
     }

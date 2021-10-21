@@ -1,6 +1,7 @@
 using Sample.AzureBlob.Infrastructure.Blob;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddRouting(options => options.LowercaseUrls = true);
 
 builder.Services.AddControllers();
 

@@ -1,3 +1,4 @@
+using Azure.Storage.Blobs;
 using Sample.AzureBlob.Infrastructure.Blob;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,7 +9,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddScoped<IAzureBlobStorage>(_ => new AzureBlobStorage(new AzureBlobSettings(builder.Configuration.GetConnectionString("AzureStorageAccount"))));
+builder.Services.AddScoped<IAzureBlobStorage>(_ => new AzureBlobStorage(new BlobServiceClient(builder.Configuration.GetConnectionString("AzureStorageAccount"))));
 
 var app = builder.Build();
 

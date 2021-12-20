@@ -17,8 +17,8 @@ namespace Sample.AzureBlob.WebApi.Controllers
         [HttpPost("upload")]
         public async Task<IActionResult> UploadAsync(ICollection<IFormFile> files)
         {
-            var container = await _azureBlobStorage.CreateContainerAsync("images");
-            string? result = null;
+            var container = "images";
+            bool result = false;
             foreach (var formFile in files)
             {
                 if (formFile.Length <= 0)
@@ -26,7 +26,7 @@ namespace Sample.AzureBlob.WebApi.Controllers
 
                 var extension = Path.GetExtension(formFile.FileName);
                 await using var stream = formFile.OpenReadStream();
-                result = await _azureBlobStorage.UploadAsync(extension, stream, container);
+                result = await _azureBlobStorage.UploadBlobAsync(extension, formFile, container);
             }
             return Ok(result);
         }
@@ -34,8 +34,7 @@ namespace Sample.AzureBlob.WebApi.Controllers
         [HttpGet("download")]
         public async Task<IActionResult> DownloadAsync([FromQuery] string fileName)
         {
-            var container = await _azureBlobStorage.CreateContainerAsync("images");
-            var result = await _azureBlobStorage.DownloadAsync(fileName, container);
+            var result = await _azureBlobStorage.GetBlobBytesAsync(fileName, "images");
 
             return Ok(result);
         }
